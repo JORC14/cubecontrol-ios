@@ -1,0 +1,8 @@
+name: CubeControl
+bundle_id: com.cubecontrol.cubebaby
+version: 1.0.0
+type: swiftpm
+platform: ios
+min_ios_version: 15.0
+scheme: CubeControl
+executable: CubeControl
