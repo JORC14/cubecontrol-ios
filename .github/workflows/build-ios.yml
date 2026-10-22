@@ -17,27 +17,47 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
-      - name: Build Swift Package for iOS Device
+      - name: Install xtool CLI
         run: |
+          brew install xtool-org/tap/xtool || true
+
+      - name: Build IPA with xtool
+        id: xtool_build
+        run: |
+          if command -v xtool >/dev/null 2>&1; then
+            echo "Running xtool dev build..."
+            xtool dev build --ipa || xtool build || true
+          fi
+
+          IPA_PATH=$(find . -name "*.ipa" -type f | head -n 1)
+          if [ -n "$IPA_PATH" ]; then
+            echo "Found IPA produced by xtool: $IPA_PATH"
+            cp "$IPA_PATH" CubeControl-iOS.ipa
+            echo "ipa_ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "xtool did not produce an ipa directly, proceeding with fallback build..."
+            echo "ipa_ready=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fallback Build (Swiftc / Xcodebuild)
+        if: steps.xtool_build.outputs.ipa_ready != 'true'
+        run: |
+          echo "Building with xcodebuild for Package.swift..."
           xcodebuild build \
-            -package-path . \
             -scheme CubeControl \
             -destination "generic/platform=iOS" \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            BUILD_DIR=./build
+            DERIVED_DATA_PATH=./DerivedData
 
-      - name: Create Payload and Package IPA
-        run: |
           mkdir -p Payload
-          APP_PATH=$(find ./build -name "CubeControl.app" -type d | head -n 1)
+          APP_PATH=$(find ./DerivedData -name "CubeControl.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            # If executable was built directly without app bundle, package it
             mkdir -p Payload/CubeControl.app
-            cp -r Resources/Info.plist Payload/CubeControl.app/
-            BIN_PATH=$(find ./build -name "CubeControl" -type f -perm +111 | head -n 1)
+            cp Resources/Info.plist Payload/CubeControl.app/
+            BIN_PATH=$(find ./DerivedData -name "CubeControl" -type f -perm +111 | head -n 1)
             cp "$BIN_PATH" Payload/CubeControl.app/CubeControl
           else
             cp -r "$APP_PATH" Payload/
